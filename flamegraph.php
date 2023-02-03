@@ -1,18 +1,29 @@
 <?php
+$currentDir = __DIR__;
 $dir = ini_get('xdebug.trace_output_dir');
-if (!$dir) $dir = '/tmp';
+if (!$dir) {
+    $dir = '/tmp';
+}
 $dir = rtrim($dir, '/\\') .'/';
 
-if (isset($_GET['file'], $_GET['width']) && is_scalar($_GET['file']) && is_scalar($_GET['width'])) {
+$error = null;
+if (!is_dir("$currentDir/FlameGraph/")) {
+    $flameGraphRepoUrl = 'https://github.com/AlexeyPlodenko/FlameGraph';
+
+    $error = "The directory \"$currentDir/FlameGraph/\" does not exist.";
+    $error .= "<br>Clone <a href=\"$flameGraphRepoUrl\" target=\"_blank\">$flameGraphRepoUrl</a>";
+    $error .= " to the web root directory.";
+}
+
+if (!$error && isset($_GET['file'], $_GET['width']) && is_scalar($_GET['file']) && is_scalar($_GET['width'])) {
     $file = $_GET['file'];
     $width = $_GET['width'];
 
-    $error = '';
     if (!preg_match('/^[a-z\d._]+\.xt$/', $file)) {
-        $error = 'Invalid file name.';
+        $error = 'File name contains not allowed characters.';
     }
     if (!$error && !ctype_digit($width)) {
-        $error = 'Width is not a number.';
+        $error = 'Parameter "width" is not a number.';
     }
 
     $filePath = $dir . $file;
@@ -20,22 +31,23 @@ if (isset($_GET['file'], $_GET['width']) && is_scalar($_GET['file']) && is_scala
         $error = 'Input file does not exist.';
     }
     if (!$error && !is_readable($filePath)) {
-        $error = 'Cannot read input file.';
+        $error = 'Cannot read input file. Check permissions.';
     }
 
-    if ($error) {
-        echo '<div style="color: red;">Error. ', $error ,'</div>';
-    } else {
-        passthru(
-            'php ' . __DIR__ . '/FlameGraph/stackcollapse-xdebug.php ' . $filePath
-            .' | ' . __DIR__ . '/FlameGraph/flamegraph.pl --width='. $width
-        );
+    if (!$error) {
+        $cmd = "php $currentDir/FlameGraph/stackcollapse-xdebug.php $filePath";
+        $cmd .= " | $currentDir/FlameGraph/flamegraph.pl --width=$width 2>&1";
+        passthru($cmd, $execResCode);
+        if ($execResCode) {
+            echo '<div style="color: red;">Error. The command execution "', htmlspecialchars($cmd);
+            echo '" has failed with the code ', $execResCode ,'.</div>';
+        }
     }
+
     return;
 }
-?>
 
-<!DOCTYPE html>
+?><!DOCTYPE html>
 <html>
 <head>
     <title>XDebug Flame Graph</title>
@@ -107,5 +119,8 @@ if (isset($_GET['file'], $_GET['width']) && is_scalar($_GET['file']) && is_scala
     </select> <input type="button" value="reload" id="reload" style="display: none;"> from
     <em>xdebug.trace_output_dir = <?php echo htmlspecialchars($dir) ?></em>
     <div id="graph" class="graph"></div>
+    <?php if ($error) : ?>
+        <div style="color: red;">Error.<br><?php echo $error ?></div>
+    <?php endif ?>
 </body>
 </html>
