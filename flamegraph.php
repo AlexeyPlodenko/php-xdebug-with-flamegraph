@@ -17,7 +17,7 @@ if (!is_dir("$currentDir/FlameGraph/")) {
 
 $traceFiles = [];
 if (!$error) {
-    $traceFiles = glob("$xdebugTraceDir/*.xt");
+    $traceFiles = glob("{$xdebugTraceDir}*.xt");
 
     // keeping the file name only
     foreach ($traceFiles as &$file) {
@@ -49,6 +49,15 @@ if (!$error) {
                 $date = date('Y-m-d H:i:s', $ts);
                 $file = "($date) $file";
             }
+        }
+        unset($file);
+
+    } else {
+        // let's use file modification time
+        foreach ($traceFiles as &$file) {
+            $ts = filemtime("{$xdebugTraceDir}$file");
+            $date = date('Y-m-d H:i:s', $ts);
+            $file = "($date) $file";
         }
         unset($file);
     }
