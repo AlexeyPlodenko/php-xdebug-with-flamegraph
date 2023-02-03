@@ -65,7 +65,7 @@ if (!$error) {
     // adding file size
     foreach ($traceFiles as $file => &$name) {
         $size = filesize("{$xdebugTraceDir}$file");
-        $name = "$file ($size b)";
+        $name = "$name ($size b)";
     }
     unset($name);
 }
