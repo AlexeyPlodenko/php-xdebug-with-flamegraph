@@ -1,10 +1,10 @@
-<?php
+<?php declare(strict_types=1);
 $currentDir = __DIR__;
-$dir = ini_get('xdebug.trace_output_dir');
-if (!$dir) {
-    $dir = '/tmp';
+$xdebugTraceDir = ini_get('xdebug.trace_output_dir');
+if (!$xdebugTraceDir) {
+    $xdebugTraceDir = '/tmp';
 }
-$dir = rtrim($dir, '/\\') .'/';
+$xdebugTraceDir = rtrim($xdebugTraceDir, '/\\') .'/';
 
 $error = null;
 if (!is_dir("$currentDir/FlameGraph/")) {
@@ -13,6 +13,45 @@ if (!is_dir("$currentDir/FlameGraph/")) {
     $error = "The directory \"$currentDir/FlameGraph/\" does not exist.";
     $error .= "<br>Clone <a href=\"$flameGraphRepoUrl\" target=\"_blank\">$flameGraphRepoUrl</a>";
     $error .= " to the web root directory.";
+}
+
+$traceFiles = [];
+if (!$error) {
+    $traceFiles = glob("$xdebugTraceDir/*.xt");
+
+    // keeping the file name only
+    foreach ($traceFiles as &$file) {
+        $file = basename($file);
+    }
+    unset($file);
+
+    // reversing the order to get the latest files first
+    $traceFiles = array_reverse($traceFiles);
+
+    $traceFiles = array_combine($traceFiles, $traceFiles);
+
+    // adding date time to the file name
+    $xdebugTraceOutputName = ini_get('xdebug.trace_output_name');
+    $tSpecifierPos = mb_strpos($xdebugTraceOutputName, '%t');
+    if ($tSpecifierPos !== false) {
+        $tSpecLen = 2;
+        $unixTsLen = 10;
+        foreach ($traceFiles as &$file) {
+            $beforeTSpec = mb_substr($file, 0, $tSpecifierPos);
+            $beforeTSpec = preg_quote($beforeTSpec);
+
+            $afterTSpec = mb_substr($file, $tSpecifierPos + $unixTsLen);
+            $afterTSpec = preg_quote($afterTSpec);
+
+            $dateRegEx = "/^$beforeTSpec(\d{10})$afterTSpec$/";
+            if (preg_match($dateRegEx, $file, $matches)) {
+                $ts = (int)$matches[1];
+                $date = date('Y-m-d H:i:s', $ts);
+                $file = "($date) $file";
+            }
+        }
+        unset($file);
+    }
 }
 
 if (!$error && isset($_GET['file'], $_GET['width']) && is_scalar($_GET['file']) && is_scalar($_GET['width'])) {
@@ -26,7 +65,7 @@ if (!$error && isset($_GET['file'], $_GET['width']) && is_scalar($_GET['file']) 
         $error = 'Parameter "width" is not a number.';
     }
 
-    $filePath = $dir . $file;
+    $filePath = $xdebugTraceDir . $file;
     if (!$error && !file_exists($filePath)) {
         $error = 'Input file does not exist.';
     }
@@ -45,6 +84,17 @@ if (!$error && isset($_GET['file'], $_GET['width']) && is_scalar($_GET['file']) 
     }
 
     return;
+}
+
+function dd(...$vars)
+{
+    $vars[] = (new Exception())->getTraceAsString();
+
+    foreach ($vars as $var) {
+        echo '<pre>', print_r($var, true), '</pre><hr>';
+    }
+
+    exit;
 }
 
 ?><!DOCTYPE html>
@@ -108,16 +158,12 @@ if (!$error && isset($_GET['file'], $_GET['width']) && is_scalar($_GET['file']) 
     <select name="file" id="file">
         <option></option>
         <?php
-            $files = glob("$dir/*.xt");
-            $files = array_reverse($files);
-            foreach ($files as $file) {
-                $fileName = basename($file);
-                $fileNameEsc = htmlspecialchars($fileName);
-                echo '<option value="', $fileNameEsc ,'">', $fileNameEsc ,'</option>';
+            foreach ($traceFiles as $file => $name) {
+                echo '<option value="', htmlspecialchars($file, ENT_QUOTES) ,'">', htmlspecialchars($name) ,'</option>';
             }
         ?>
     </select> <input type="button" value="reload" id="reload" style="display: none;"> from
-    <em>xdebug.trace_output_dir = <?php echo htmlspecialchars($dir) ?></em>
+    <em>xdebug.trace_output_dir = <?php echo htmlspecialchars($xdebugTraceDir) ?></em>
     <div id="graph" class="graph"></div>
     <?php if ($error) : ?>
         <div style="color: red;">Error.<br><?php echo $error ?></div>
