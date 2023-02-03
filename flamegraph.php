@@ -61,6 +61,13 @@ if (!$error) {
         }
         unset($file);
     }
+
+    // adding file size
+    foreach ($traceFiles as $file => &$name) {
+        $size = filesize("{$xdebugTraceDir}$file");
+        $name = "$file ($size b)";
+    }
+    unset($name);
 }
 
 if (!$error && isset($_GET['file'], $_GET['width']) && is_scalar($_GET['file']) && is_scalar($_GET['width'])) {
